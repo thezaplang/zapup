@@ -1,5 +1,5 @@
 # ZapUp
-ZapUp is a command-line version manager for the Zap Programming Language. It allows you to install, manage, and switch between different Zap versions easily.
+ZapUp is a command-line version manager for the [Zap Programming Language](https://github.com/thezaplang/zap). It allows you to install, manage, and switch between different Zap versions easily.
 
 ## Installation
 
