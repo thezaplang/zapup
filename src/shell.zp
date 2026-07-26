@@ -1,0 +1,144 @@
+import "std/fs";
+import "std/process";
+import "std/string";
+
+pub fun quote(value: String) String {
+    return "'" + value + "'";
+}
+
+fun bundledVsix(directory: String) String {
+    var listing = directory + "/.zapup-vsix-path";
+    var command = "find " + quote(directory) +
+        " -maxdepth 1 -type f -name '*.vsix' -printf '%p\\n' > " + quote(listing);
+
+    if process.exec(command) != 0 {
+        return "";
+    }
+
+    var paths = fs.readLines(listing) or err {
+        return "";
+    };
+    process.exec("rm -f " + quote(listing));
+
+    if paths.len() != 1 {
+        return "";
+    }
+    return paths.at(0);
+}
+
+fun editorCli() String {
+    if process.exec("command -v code > /dev/null 2>&1") == 0 {
+        return "code";
+    }
+    if process.exec("command -v code-insiders > /dev/null 2>&1") == 0 {
+        return "code-insiders";
+    }
+    if process.exec("command -v codium > /dev/null 2>&1") == 0 {
+        return "codium";
+    }
+    return "";
+}
+
+fun installVsCodeExtension(directory: String) Int {
+    var vsix = bundledVsix(directory);
+    if vsix == "" {
+        println("could not find exactly one VS Code .vsix extension");
+        return 1;
+    }
+
+    var cli = editorCli();
+    if cli == "" {
+        println("VS Code CLI not found; install the bundled .vsix manually: " + vsix);
+        return 1;
+    }
+
+    if process.exec(cli + " --install-extension " + quote(vsix) + " --force") != 0 {
+        println("could not install the Zap VS Code extension");
+        return 1;
+    }
+
+    println("Zap VS Code extension installed successfully");
+    return 0;
+}
+
+fun shouldInstallVsCodeExtension() Bool {
+    println("Install the Zap extension for VS Code now? (y/n)");
+    return getln() == "y";
+}
+
+pub fun maybeInstallVsCodeExtension(directory: String) Int {
+    if !shouldInstallVsCodeExtension() {
+        return 0;
+    }
+    return installVsCodeExtension(directory);
+}
+
+pub fun maybeBuildAndInstallVsCodeExtension(sourceDir: String) Int {
+    if !shouldInstallVsCodeExtension() {
+        return 0;
+    }
+
+    var extensionDir = sourceDir + "/src/lsp/vscode/zap";
+    println("Building the Zap VS Code extension...");
+    if process.exec("cd " + quote(extensionDir) + " && npm install --no-package-lock && npm run package") != 0 {
+        println("could not build the Zap VS Code extension");
+        return 1;
+    }
+    return installVsCodeExtension(extensionDir);
+}
+
+pub fun configurePath(binDir: String) Int {
+
+    println("Add the installed Zap directory to PATH?");
+    println("Choose bash, zsh, fish, or press Enter to skip:");
+
+    var shell = getln();
+    if shell == "" {
+        return 0;
+    }
+
+    var home: String = process.getenv("HOME");
+    var configFile: String = "";
+    var pathLine: String = "";
+
+    if shell == "bash" {
+        configFile = home + "/.bashrc";
+        pathLine = "export PATH=\"" + binDir + ":$PATH\"";
+    } else if shell == "zsh" {
+        configFile = home + "/.zshrc";
+        pathLine = "export PATH=\"" + binDir + ":$PATH\"";
+    } else if shell == "fish" {
+        configFile = home + "/.config/fish/config.fish";
+        pathLine = "set -gx PATH \"" + binDir + "\" $PATH";
+    } else {
+        println("unknown shell; PATH was not changed");
+        return 1;
+    }
+
+    var marker: String = "# Added by zapup: " + binDir;
+    var content: String = "";
+
+    if fs.exists(configFile) {
+        content = fs.readFile(configFile) or err {
+            printfln("could not read shell configuration: %d", err as Int);
+            return 2;
+        };
+    }
+    if string.indexOf(string.view(content), marker) >= 0 {
+        println("PATH entry already exists");
+        return 0;
+    }
+    if string.len(content) > 0 {
+        content = content + "\n";
+    }
+
+    content = content + marker + "\n" + pathLine + "\n";
+    
+    fs.writeFileSafe(configFile, content) or err {
+        printfln("could not update shell configuration: %d", err as Int);
+        return 3;
+    };
+
+    printfln("added %s to PATH; restart %s or reload its configuration", binDir, shell);
+    return 0;
+}

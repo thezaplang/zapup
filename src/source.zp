@@ -1,0 +1,100 @@
+import "std/fs";
+import "std/process";
+import "std/string";
+import "shell";
+import "thor";
+
+fun sourceCommit(sourceDir: String) String {
+    var commitFile = sourceDir + "/.zapup-commit";
+    var command = "git -C " + shell.quote(sourceDir) + " rev-parse HEAD > " + shell.quote(commitFile);
+
+    if process.exec(command) != 0 {
+        return "";
+    }
+    var raw = fs.readFile(commitFile) or err {
+        return "";
+    };
+
+    return string.trim(raw);
+}
+
+pub fun install(requestedCommit: String) Int {
+
+    var versionsDir = process.getenv("HOME") + "/.local/share/zapup/versions";
+
+    fs.ensureDir(versionsDir) or err {
+        printfln("could not create versions directory: %d", err as Int);
+        return 2;
+    };
+
+    var temporaryDir = versionsDir + "/.zapup-source-tmp";
+
+    if fs.exists(temporaryDir) {
+        println("source install is already in progress; remove .zapup-source-tmp before retrying");
+        return 3;
+    }
+
+    var repository = "https://github.com/thezaplang/zap.git";
+
+    if requestedCommit == "" {
+
+        println("cloning the latest Zap source commit...");
+        var cloneCommand = "git clone --depth 1 " + shell.quote(repository) + " " + shell.quote(temporaryDir);
+        if process.exec(cloneCommand) != 0 {
+            println("could not clone the Zap source repository");
+            return 4;
+        }
+
+    } else {
+        printfln("cloning source commit %s...", requestedCommit);
+        if process.exec("git init " + shell.quote(temporaryDir)) != 0 ||
+           process.exec("git -C " + shell.quote(temporaryDir) + " remote add origin " + shell.quote(repository)) != 0 ||
+           process.exec("git -C " + shell.quote(temporaryDir) + " fetch --depth 1 origin " + shell.quote(requestedCommit)) != 0 ||
+           process.exec("git -C " + shell.quote(temporaryDir) + " checkout --detach FETCH_HEAD") != 0 {
+            println("could not clone the requested Zap source commit");
+            return 4;
+        }
+    }
+
+    if !fs.exists(temporaryDir + "/build.sh") {
+        println("could not clone the Zap source repository");
+        return 4;
+    }
+
+    var commit = sourceCommit(temporaryDir);
+
+    if commit == "" {
+        println("could not determine the cloned commit");
+        return 5;
+    }
+
+    var installDir = versionsDir + "/" + commit;
+
+    if fs.exists(installDir) {
+        println("this source commit is already installed");
+        return 0;
+    }
+    fs.rename(temporaryDir, installDir) or err {
+        printfln("could not move source checkout: %d", err as Int);
+        return 6;
+    };
+
+    println("building Zap from source...");
+
+    if process.exec("sh " + shell.quote(installDir + "/build.sh")) != 0 {
+        println("could not build Zap from source");
+        return 7;
+    }
+
+    printfln("Zap source build installed at %s", installDir);
+    if thor.install(installDir + "/build") != 0 {
+        return 8;
+    }
+    if shell.maybeBuildAndInstallVsCodeExtension(installDir) != 0 {
+        return 9;
+    }
+    if shell.configurePath(installDir + "/build") != 0 {
+        return 10;
+    }
+    return 0;
+}

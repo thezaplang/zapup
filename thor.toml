@@ -1,0 +1,11 @@
+name         = "zapup"
+version      = "0.1.0"
+out          = "build/"
+entry        = "src/main.zp"
+
+# compiler  = "zapc"
+# optimization = "O0"
+# flags     = ""
+
+[imports]
+

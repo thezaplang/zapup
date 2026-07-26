@@ -1,0 +1,28 @@
+import "release";
+import "source";
+import "std/process";
+
+fun showHelp() {
+    println("Usage: zapup install [tag | --src [commit_sha]]");
+    println("");
+    println("Downloads and installs the latest Zap release, or the selected tag, for Linux x86_64.");
+    println("  tag                 Installs a specific release tag, for example v0.2.1.");
+    println("  --src [commit_sha]  Clones and builds the latest source commit or the selected commit.");
+}
+
+fun main() Int {
+    if process.argc() == 2 && process.argv(1) == "install" {
+        return release.install();
+    }else if process.argc() == 3 && process.argv(1) == "install" && process.argv(2) == "--src" {
+        return source.install("");
+    }else if process.argc() == 3 && process.argv(1) == "install" {
+        return release.installTag(process.argv(2));
+    }
+    else if process.argc() == 4 && process.argv(1) == "install" && process.argv(2) == "--src" {
+        return source.install(process.argv(3));
+    }else{
+        showHelp();
+    }
+
+    return 1;
+}

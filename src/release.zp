@@ -1,0 +1,177 @@
+import "std/fs";
+import "std/http";
+import "std/io";
+import "std/json";
+import "std/process";
+import "std/string";
+import "shell";
+import "thor";
+
+fun latestRelease() json.JsonObject {
+    return releaseAt("https://api.github.com/repos/thezaplang/zap/releases/latest");
+}
+
+fun taggedRelease(tag: String) json.JsonObject {
+    return releaseAt("https://api.github.com/repos/thezaplang/zap/releases/tags/" + tag);
+}
+
+fun releaseAt(url: String) json.JsonObject {
+
+    var empty = new json.JsonObject();
+    empty.valid = false;
+    var response = http.get(url);
+
+    if !http.isSuccess(response) {
+        return empty;
+    }
+
+    var parser = new json.JsonParser(response.body);
+    var release = parser.parseObjectFields();
+
+    if !release.valid {
+        return empty;
+    }
+
+    return release;
+}
+
+fun tagName(release: json.JsonObject) String {
+
+    var tag = release.get("tag_name");
+
+    if !tag.valid || tag.type != json.JsonType.STRING {
+        return "";
+    }
+
+    return tag.stringVal;
+}
+
+fun archiveName(tag: String) String {
+    return "zap-" + tag + "-linux-x86_64.tar.gz";
+}
+
+fun extractedArchiveDir(tag: String) String {
+    var archive = archiveName(tag);
+    return string.owned(string.slice(string.view(archive), 0, string.len(archive) - 7));
+}
+
+fun archiveUrl(release: json.JsonObject, tag: String) String {
+
+    var assets = release.get("assets");
+
+    if !assets.valid || assets.type != json.JsonType.ARRAY {
+        return "";
+    }
+
+    var expectedName = archiveName(tag);
+    printfln("looking for %s in release assets...", expectedName);
+    var i = 0;
+
+    while i < assets.arrayVal.len() {
+
+        var asset = assets.arrayVal.at(i);
+
+        if asset.type == json.JsonType.OBJECT {
+
+            var parser = new json.JsonParser(asset.objectSource);
+            var fields = parser.parseObjectFields();
+            var name = fields.get("name");
+
+            if name.valid && name.type == json.JsonType.STRING && name.stringVal == expectedName {
+
+                var url = fields.get("browser_download_url");
+                if url.valid && url.type == json.JsonType.STRING {
+                    return url.stringVal;
+                }
+
+            }
+        }
+        i++;
+    }
+    return "";
+}
+
+fun extractArchive(archivePath: String, installDir: String) Int {
+    return process.exec("tar -xzf " + shell.quote(archivePath) + " -C " + shell.quote(installDir));
+}
+
+pub fun install() Int {
+    var release = latestRelease();
+    return installRelease(release, "latest");
+}
+
+pub fun installTag(tag: String) Int {
+    var release = taggedRelease(tag);
+    return installRelease(release, "the requested");
+}
+
+fun installRelease(release: json.JsonObject, releaseDescription: String) Int {
+    var tag = tagName(release);
+
+    if tag == "" {
+        printfln("could not fetch %s Zap release", releaseDescription);
+        return 2;
+    }
+
+    var downloadUrl = archiveUrl(release, tag);
+
+    if downloadUrl == "" {
+        printfln("could not find the Linux x86_64 archive in %s release", releaseDescription);
+        return 3;
+    }
+
+    var installDir = process.getenv("HOME") + "/.local/share/zapup/versions/" + tag;
+    var archivePath = installDir + "/" + archiveName(tag);
+
+    if !fs.exists(installDir) {
+
+        fs.mkdirAll(installDir) or err {
+            printfln("could not create install directory: %d", err as Int);
+            return 2;
+        };
+
+    } else {
+        println("already exists do you want to overwrite it? (y/n)");
+        var answer = getln();
+
+        if answer != "y" {
+            println("aborting...");
+            return 0;
+        }
+
+    }
+
+    println("downloading Zap " + tag + " from " + downloadUrl + "...");
+    io.flush();
+
+    var archive = http.getFollowRedirects(downloadUrl, 5);
+    
+    if !http.isSuccess(archive) {
+        println("could not download the Zap archive");
+        return 4;
+    }
+    fs.writeFile(archivePath, archive.body) or err {
+        printfln("could not write archive: %d", err as Int);
+        return 5;
+    };
+
+    println("extracting archive...");
+
+    if extractArchive(archivePath, installDir) != 0 {
+        println("could not extract the Zap archive");
+        return 6;
+    }
+
+    println("Zap installed successfully");
+    var releaseDir = installDir + "/" + extractedArchiveDir(tag);
+    if thor.install(releaseDir) != 0 {
+        return 7;
+    }
+    if shell.maybeInstallVsCodeExtension(releaseDir) != 0 {
+        return 8;
+    }
+    if shell.configurePath(releaseDir) != 0 {
+        return 9;
+    }
+    return 0;
+}
