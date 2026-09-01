@@ -120,7 +120,7 @@ fun installRelease(release: json.JsonObject, releaseDescription: String) Int {
         return 3;
     }
 
-    var installDir = process.getenv("HOME") + "/.local/share/zapup/versions/" + tag;
+    var installDir = process.getenv("HOME") + "/.local/share/pupaz/versions/" + tag;
     var archivePath = installDir + "/" + archiveName(tag);
 
     if !fs.exists(installDir) {
