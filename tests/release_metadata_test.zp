@@ -1,0 +1,14 @@
+import "../src/release_metadata";
+
+fun main() Int {
+    var release = release_metadata.parseObject("{\"assets\":[null,{}, {\"name\":\"thor\",\"browser_download_url\":17},{\"name\":\"other\",\"browser_download_url\":\"wrong\"},{\"name\":\"thor\",\"browser_download_url\":\"https://example.invalid/thor\"}]}");
+    if release_metadata.assetUrl(release, "thor") != "https://example.invalid/thor" { return 1; }
+    if release_metadata.assetUrl(release, "zap-v0.4.1-linux-x86_64.tar.gz") != "" { return 2; }
+    var invalid = release_metadata.parseObject("not json");
+    if release_metadata.assetUrl(invalid, "thor") != "" { return 3; }
+    var array = release_metadata.parseObject("[]");
+    if release_metadata.assetUrl(array, "thor") != "" { return 4; }
+    var wrongType = release_metadata.parseObject("{\"assets\":true}");
+    if release_metadata.assetUrl(wrongType, "thor") != "" { return 5; }
+    return 0;
+}

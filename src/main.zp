@@ -3,11 +3,11 @@ import "source";
 import "std/process";
 
 fun showHelp() {
-    println("Usage: zapup install [tag | --src [commit_sha]]");
+    println("Usage: zapup install [tag | --src [lsp_commit_sha]]");
     println("");
     println("Downloads and installs the latest Zap release, or the selected tag, for Linux x86_64.");
     println("  tag                 Installs a specific release tag, for example v0.2.1.");
-    println("  --src [commit_sha]  Clones and builds the latest source commit or the selected commit.");
+    println("  --src [lsp_commit_sha]  Builds a zap-lsp revision and its pinned Zap compiler.");
 }
 
 fun main() Int {

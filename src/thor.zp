@@ -1,44 +1,21 @@
+import "release_metadata";
 import "std/fs";
 import "std/http";
 import "std/json";
 import "std/process";
 import "shell";
 
-fun latestRelease() json.JsonObject {
-    var empty = new json.JsonObject();
-    empty.valid = false;
-
+fun latestRelease() json.Object {
+    var empty = new json.Object();
     var response = http.get("https://api.github.com/repos/thezaplang/thor/releases/latest");
     if !http.isSuccess(response) {
         return empty;
     }
-
-    var parser = new json.JsonParser(response.body);
-    return parser.parseObjectFields();
+    return release_metadata.parseObject(response.body);
 }
 
-fun binaryUrl(release: json.JsonObject) String {
-    var assets = release.get("assets");
-    if !assets.valid || assets.type != json.JsonType.ARRAY {
-        return "";
-    }
-
-    var i = 0;
-    while i < assets.arrayVal.len() {
-        var asset = assets.arrayVal.at(i);
-        if asset.type == json.JsonType.OBJECT {
-            var parser = new json.JsonParser(asset.objectSource);
-            var fields = parser.parseObjectFields();
-            var name = fields.get("name");
-            var url = fields.get("browser_download_url");
-            if name.valid && name.type == json.JsonType.STRING && name.stringVal == "thor" &&
-               url.valid && url.type == json.JsonType.STRING {
-                return url.stringVal;
-            }
-        }
-        i++;
-    }
-    return "";
+fun binaryUrl(release: json.Object) String {
+    return release_metadata.assetUrl(release, "thor");
 }
 
 pub fun install(binDir: String) Int {

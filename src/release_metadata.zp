@@ -1,0 +1,40 @@
+import "std/json" as json;
+
+pub fun parseObject(text: String) json.Object {
+    var value = json.parse(text) or err {
+        return new json.Object();
+    };
+    return value.asObject() or err {
+        return new json.Object();
+    };
+}
+
+fun matchingAssetUrl(assets: json.Array, index: Int, expectedName: String) String {
+    var asset = assets.getObject(index) or err {
+        return "";
+    };
+    var name = asset.getString("name") or err {
+        return "";
+    };
+    if name != expectedName {
+        return "";
+    }
+    return asset.getString("browser_download_url") or err {
+        return "";
+    };
+}
+
+pub fun assetUrl(release: json.Object, expectedName: String) String {
+    var assets = release.getArray("assets") or err {
+        return "";
+    };
+    var i = 0;
+    while i < assets.size() {
+        var url = matchingAssetUrl(assets, i, expectedName);
+        if url != "" {
+            return url;
+        }
+        i++;
+    }
+    return "";
+}

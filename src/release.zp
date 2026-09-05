@@ -1,3 +1,4 @@
+import "release_metadata";
 import "std/fs";
 import "std/http";
 import "std/io";
@@ -7,43 +8,27 @@ import "std/string";
 import "shell";
 import "thor";
 
-fun latestRelease() json.JsonObject {
+fun latestRelease() json.Object {
     return releaseAt("https://api.github.com/repos/thezaplang/zap/releases/latest");
 }
 
-fun taggedRelease(tag: String) json.JsonObject {
+fun taggedRelease(tag: String) json.Object {
     return releaseAt("https://api.github.com/repos/thezaplang/zap/releases/tags/" + tag);
 }
 
-fun releaseAt(url: String) json.JsonObject {
-
-    var empty = new json.JsonObject();
-    empty.valid = false;
+fun releaseAt(url: String) json.Object {
+    var empty = new json.Object();
     var response = http.get(url);
-
     if !http.isSuccess(response) {
         return empty;
     }
-
-    var parser = new json.JsonParser(response.body);
-    var release = parser.parseObjectFields();
-
-    if !release.valid {
-        return empty;
-    }
-
-    return release;
+    return release_metadata.parseObject(response.body);
 }
 
-fun tagName(release: json.JsonObject) String {
-
-    var tag = release.get("tag_name");
-
-    if !tag.valid || tag.type != json.JsonType.STRING {
+fun tagName(release: json.Object) String {
+    return release.getString("tag_name") or err {
         return "";
-    }
-
-    return tag.stringVal;
+    };
 }
 
 fun archiveName(tag: String) String {
@@ -55,40 +40,10 @@ fun extractedArchiveDir(tag: String) String {
     return string.owned(string.slice(string.view(archive), 0, string.len(archive) - 7));
 }
 
-fun archiveUrl(release: json.JsonObject, tag: String) String {
-
-    var assets = release.get("assets");
-
-    if !assets.valid || assets.type != json.JsonType.ARRAY {
-        return "";
-    }
-
+fun archiveUrl(release: json.Object, tag: String) String {
     var expectedName = archiveName(tag);
     printfln("looking for %s in release assets...", expectedName);
-    var i = 0;
-
-    while i < assets.arrayVal.len() {
-
-        var asset = assets.arrayVal.at(i);
-
-        if asset.type == json.JsonType.OBJECT {
-
-            var parser = new json.JsonParser(asset.objectSource);
-            var fields = parser.parseObjectFields();
-            var name = fields.get("name");
-
-            if name.valid && name.type == json.JsonType.STRING && name.stringVal == expectedName {
-
-                var url = fields.get("browser_download_url");
-                if url.valid && url.type == json.JsonType.STRING {
-                    return url.stringVal;
-                }
-
-            }
-        }
-        i++;
-    }
-    return "";
+    return release_metadata.assetUrl(release, expectedName);
 }
 
 fun extractArchive(archivePath: String, installDir: String) Int {
@@ -105,7 +60,7 @@ pub fun installTag(tag: String) Int {
     return installRelease(release, "the requested");
 }
 
-fun installRelease(release: json.JsonObject, releaseDescription: String) Int {
+fun installRelease(release: json.Object, releaseDescription: String) Int {
     var tag = tagName(release);
 
     if tag == "" {
@@ -120,7 +75,7 @@ fun installRelease(release: json.JsonObject, releaseDescription: String) Int {
         return 3;
     }
 
-    var installDir = process.getenv("HOME") + "/.local/share/zapup/versions/" + tag;
+    var installDir = process.getEnv("HOME") + "/.local/share/zapup/versions/" + tag;
     var archivePath = installDir + "/" + archiveName(tag);
 
     if !fs.exists(installDir) {

@@ -3,7 +3,18 @@ import "std/process";
 import "std/string";
 
 pub fun quote(value: String) String {
-    return "'" + value + "'";
+    var result: String = "'";
+    var i = 0;
+    while i < string.len(value) {
+        var character = string.at(value, i);
+        if character == '\'' {
+            result = result + "'\\''";
+        } else {
+            result = result + character;
+        }
+        i++;
+    }
+    return result + "'";
 }
 
 fun bundledVsix(directory: String) String {
@@ -78,7 +89,7 @@ pub fun maybeBuildAndInstallVsCodeExtension(sourceDir: String) Int {
         return 0;
     }
 
-    var extensionDir = sourceDir + "/src/lsp/vscode/zap";
+    var extensionDir = sourceDir + "/editors/vscode";
     println("Building the Zap VS Code extension...");
     if process.exec("cd " + quote(extensionDir) + " && npm install --no-package-lock && npm run package") != 0 {
         println("could not build the Zap VS Code extension");
@@ -97,7 +108,7 @@ pub fun configurePath(binDir: String) Int {
         return 0;
     }
 
-    var home: String = process.getenv("HOME");
+    var home: String = process.getEnv("HOME");
     var configFile: String = "";
     var pathLine: String = "";
 
