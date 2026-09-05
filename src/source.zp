@@ -20,7 +20,7 @@ fun sourceCommit(sourceDir: String) String {
 
 pub fun install(requestedCommit: String) Int {
 
-    var versionsDir = process.getenv("HOME") + "/.local/share/zapup/versions";
+    var versionsDir = process.getEnv("HOME") + "/.local/share/zapup/versions";
 
     fs.ensureDir(versionsDir) or err {
         printfln("could not create versions directory: %d", err as Int);
@@ -34,14 +34,14 @@ pub fun install(requestedCommit: String) Int {
         return 3;
     }
 
-    var repository = "https://github.com/thezaplang/zap.git";
+    var repository = "https://github.com/thezaplang/zap-lsp.git";
 
     if requestedCommit == "" {
 
-        println("cloning the latest Zap source commit...");
+        println("cloning the latest zap-lsp source commit...");
         var cloneCommand = "git clone --depth 1 " + shell.quote(repository) + " " + shell.quote(temporaryDir);
         if process.exec(cloneCommand) != 0 {
-            println("could not clone the Zap source repository");
+            println("could not clone the zap-lsp source repository");
             return 4;
         }
 
@@ -56,8 +56,13 @@ pub fun install(requestedCommit: String) Int {
         }
     }
 
-    if !fs.exists(temporaryDir + "/build.sh") {
-        println("could not clone the Zap source repository");
+    if !fs.exists(temporaryDir + "/build-toolchain.sh") {
+        println("could not clone the zap-lsp source repository");
+        return 4;
+    }
+
+    if process.exec("git -C " + shell.quote(temporaryDir) + " submodule update --init --recursive") != 0 {
+        println("could not fetch the pinned Zap compiler and its dependencies");
         return 4;
     }
 
@@ -68,7 +73,7 @@ pub fun install(requestedCommit: String) Int {
         return 5;
     }
 
-    var installDir = versionsDir + "/" + commit;
+    var installDir = versionsDir + "/lsp-" + commit;
 
     if fs.exists(installDir) {
         println("this source commit is already installed");
@@ -81,19 +86,19 @@ pub fun install(requestedCommit: String) Int {
 
     println("building Zap from source...");
 
-    if process.exec("sh " + shell.quote(installDir + "/build.sh")) != 0 {
+    if process.exec("bash " + shell.quote(installDir + "/build-toolchain.sh")) != 0 {
         println("could not build Zap from source");
         return 7;
     }
 
     printfln("Zap source build installed at %s", installDir);
-    if thor.install(installDir + "/build") != 0 {
+    if thor.install(installDir + "/build-toolchain/stage/bin") != 0 {
         return 8;
     }
     if shell.maybeBuildAndInstallVsCodeExtension(installDir) != 0 {
         return 9;
     }
-    if shell.configurePath(installDir + "/build") != 0 {
+    if shell.configurePath(installDir + "/build-toolchain/stage/bin") != 0 {
         return 10;
     }
     return 0;
